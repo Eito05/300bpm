@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>300BPM Rhythm & Arrow Trainer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .beat-active {
+            animation: pulse 0.1s ease-out;
+            background-color: #ef4444 !important;
+        }
+        .arrow-box {
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8rem;
+            transition: transform 0.1s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-md w-full bg-gray-800 rounded-3xl p-8 shadow-2xl border border-gray-700 text-center">
+        <h1 class="text-2xl font-bold mb-2">Rhythm Trainer</h1>
+        <p class="text-gray-400 mb-6">300 BPM / 3s Interval</p>
+
+        <!-- Rhythm visual indicator -->
+        <div class="flex justify-center gap-4 mb-8">
+            <div id="beat-dot" class="w-6 h-6 rounded-full bg-gray-600 transition-colors"></div>
+        </div>
+
+        <!-- Arrow display area -->
+        <div class="bg-gray-700 rounded-2xl mb-8 p-4 relative overflow-hidden">
+            <div id="arrow-display" class="arrow-box">?</div>
+            <div id="progress-bar" class="absolute bottom-0 left-0 h-2 bg-blue-500" style="width: 0%"></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="space-y-4">
+            <button id="start-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-colors text-xl">
+                START
+            </button>
+            <div class="flex flex-col gap-2 text-sm text-gray-500">
+                <p>3秒ごとに矢印が切り替わります</p>
+                <p id="share-info" class="text-xs italic"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const bpm = 300;
+        const intervalMs = 3000;
+        const beatInterval = (60 / bpm) * 1000;
+        
+        let isRunning = false;
+        let audioCtx = null;
+        let nextArrowTime = 0;
+        let lastBeatTime = 0;
+        let animationFrame;
+
+        const arrows = ['←', '↑', '→'];
+        const startBtn = document.getElementById('start-btn');
+        const arrowDisplay = document.getElementById('arrow-display');
+        const beatDot = document.getElementById('beat-dot');
+        const progressBar = document.getElementById('progress-bar');
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playClick(time) {
+            const osc = audioCtx.createOscillator();
+            const envelope = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, time);
+            envelope.gain.setValueAtTime(0.1, time);
+            envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+            osc.connect(envelope);
+            envelope.connect(audioCtx.destination);
+            osc.start(time);
+            osc.stop(time + 0.05);
+        }
+
+        function update() {
+            if (!isRunning) return;
+            const now = audioCtx.currentTime * 1000;
+
+            if (now >= lastBeatTime + beatInterval) {
+                lastBeatTime = now;
+                playClick(audioCtx.currentTime);
+                beatDot.classList.add('beat-active');
+                setTimeout(() => beatDot.classList.remove('beat-active'), 50);
+            }
+
+            if (now >= nextArrowTime) {
+                let newArrow;
+                do {
+                    newArrow = arrows[Math.floor(Math.random() * arrows.length)];
+                } while (newArrow === arrowDisplay.innerText);
+                
+                arrowDisplay.innerText = newArrow;
+                nextArrowTime = now + intervalMs;
+                arrowDisplay.style.transform = 'scale(1.3)';
+                setTimeout(() => arrowDisplay.style.transform = 'scale(1)', 100);
+            }
+
+            const timeLeft = nextArrowTime - now;
+            const progress = ((intervalMs - timeLeft) / intervalMs) * 100;
+            progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+
+            animationFrame = requestAnimationFrame(update);
+        }
+
+        startBtn.addEventListener('click', () => {
+            initAudio();
+            if (isRunning) {
+                isRunning = false;
+                startBtn.innerText = 'START';
+                startBtn.className = startBtn.className.replace('bg-red-600', 'bg-blue-600').replace('hover:bg-red-500', 'hover:bg-blue-500');
+                cancelAnimationFrame(animationFrame);
+                arrowDisplay.innerText = '?';
+                progressBar.style.width = '0%';
+            } else {
+                isRunning = true;
+                startBtn.innerText = 'STOP';
+                startBtn.className = startBtn.className.replace('bg-blue-600', 'bg-red-600').replace('hover:bg-blue-500', 'hover:bg-red-500');
+                const now = audioCtx.currentTime * 1000;
+                lastBeatTime = now;
+                nextArrowTime = now; 
+                update();
+            }
+        });
+    </script>
+</body>
+</html>
